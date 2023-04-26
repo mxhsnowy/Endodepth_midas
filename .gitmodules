@@ -1,0 +1,4 @@
+[submodule "MiDaS"]
+    path = MiDaS
+    url = https://github.com/isl-org/MiDaS
+    branch = master
