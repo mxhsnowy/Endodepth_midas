@@ -73,11 +73,12 @@ def disp_to_depth(disp, min_depth, max_depth):
 class MidasDepth:
     # Predict one->many and many->many
     # NOTE: the depth output, for this application scale it from 0->1 rather than 0->255 for visualization
-    def __init__(self, modelPath) -> None:
+    def __init__(self, modelPath, scale, saturationDepth) -> None:
         self.midas, self.transform, self.netH, self.netW = load_main_dpt_model(modelPath)
         self.device = torch.device('cuda')
         self.optimize = False
-        self.saturationDepth = 300
+        self.saturationDepth = saturationDepth
+        self.scale=scale
 
     @staticmethod
     def make_output_folder(outputPath):
@@ -113,6 +114,8 @@ class MidasDepth:
     def predict_and_save(self, img, dphSavePath):
         result = prediction(device=self.device, model=self.midas, image=img,
                             inputSize=(self.netW, self.netH), targetSize=img[1::-1], optimize=self.optimize, useData=False)
+        # result = result*self.scale
+        # depth[depth]
         depthImg = get_depth_img(result)
         depthImg.save(dphSavePath)
 
@@ -128,7 +131,7 @@ class MidasDepth:
         vHeight = int(video.stream.get(cv2.CAP_PROP_FRAME_HEIGHT))
         vFrame = int(video.stream.get(cv2.CAP_PROP_FRAME_COUNT))
         
-               # depthVideoCapture = cv2.VideoWriter(depthVideoPath, cv2.VideoWriter_fourcc(*'mp4v'), fps, (vWidth, vHeight), True)
+        # depthVideoCapture = cv2.VideoWriter(depthVideoPath, cv2.VideoWriter_fourcc(*'mp4v'), fps, (vWidth, vHeight), True)
         if vFrame<=nFrames:
             nFrames = vFrame
         with torch.no_grad():
@@ -137,7 +140,6 @@ class MidasDepth:
                 frame = video.read()
                 if frame is not None:
                     name = f'{baseName}_{frame_index}.jpg'
-                    
                     original_image_rgb = np.flip(frame, 2)  # in [0, 255] (flip required to get RGB)
                     image = self.transform({"image": original_image_rgb/255})["image"]
                     imgFolder, mskFolder = self.make_output_folder(outputPath)
@@ -209,6 +211,19 @@ def get_parser():
                         default=None,
                         help='Path to the trained weights of model'
                         )
+    parser.add_argument(
+        '--scale',
+        type=int,
+        default=52.864,
+        help='image depth scaling. For Hamlyn dataset the weighted average baseline is 5.2864. It is multiplied by 10 '
+             'because the imposed baseline during training is 0.1',
+    )
+    parser.add_argument(
+        '--saturation_depth',
+        type=int,
+        default=300,
+        help='saturation depth of the estimated depth images. For Hamlyn dataset it is 300 mm by default',
+    )
 
     # parser.add_argument('-t', '--model_type',
     #                     default='dpt_beit_large_512',
@@ -253,8 +268,9 @@ def get_parser():
 
 
 if __name__=='__main__':
-    arguments = get_parser()
-    depthPred = MidasDepth(arguments.model_weights)
-    inputPath = arguments.input_path
-    outputPath = arguments.output_path
+    args = get_parser()
+    
+    depthPred = MidasDepth(args.model_weights, args.scale, args.saturation_depth)
+    inputPath = args.input_path
+    outputPath = args.output_path
     depthPred(inputPath, outputPath)
