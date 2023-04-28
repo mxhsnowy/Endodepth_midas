@@ -9,8 +9,9 @@ import numpy as np
 import time
 import PIL.Image as pil
 import argparse
+import shutil
 
-def prediction(device, model, image, inputSize, targetSize, optimize, useData):
+def prediction(device, model, image, inputSize, targetSize, optimize, useData=True, scale=True):
     """
     Run the inference and interpolate.
 
@@ -32,18 +33,16 @@ def prediction(device, model, image, inputSize, targetSize, optimize, useData):
     if optimize and torch.device('cuda')==device:
         sample=sample.to(memory_format=torch.channels_last)
         sample=sample.half()
-    prediction = model.forward(sample)
-    prediction = (
-            torch.nn.functional.interpolate(
+    prediction = model(sample)
+    result = torch.nn.functional.interpolate(
                 prediction.unsqueeze(1),
                 size=targetSize[::-1],
                 mode="bicubic",
                 align_corners=False,
-            )
-            .squeeze()
-            .cpu()
-            .numpy()
-        )
+            ).squeeze().cpu().numpy()
+    if scale:
+        _, result = disp_to_depth(result, 0.1, 100)
+    prediction = (result)
     return prediction
 
 # def simple_depth_output(model, image, device):
@@ -80,11 +79,18 @@ class MidasDepth:
         self.optimize = False
         self.saturationDepth = 300
 
-
+    @staticmethod
+    def make_output_folder(outputPath):
+        imgFullFolder = os.path.join(outputPath, 'color')
+        mskFullFolder = os.path.join(outputPath, 'depth')
+        if not os.path.isdir(outputPath):
+            os.makedirs(imgFullFolder)
+            os.makedirs(mskFullFolder)
+        return imgFullFolder, mskFullFolder
+     
     def predict_folder(self, inputPath, outputPath, nImage=1000):
         # from folder to folder
-        if not os.isdir(outputPath):
-            os.makedirs(outputPath)
+        self.make_output_folder(outputPath)
         imgNames = os.listdir(inputPath)
         nImgFol = len(imgNames)
         if nImgFol<=nImage:
@@ -92,19 +98,23 @@ class MidasDepth:
         with torch.no_grad():
             for imgName in imgNames[:nImgFol]:
                 imgBaseName = imgName[:-4]
-                imgPath = os.path.join(inputPath, imgName)
-                originalImage = read_image(imgPath)
+                imgInputPath = os.path.join(inputPath, imgName)
+                originalImage = read_image(imgInputPath)
                 image = self.transform({'image': originalImage/255})['image']
-                imageOutPath = os.path.join(outputPath, imgBaseName) 
+                imgFullFol, mskFullFol = self.make_output_folder(outputPath)
+                imgResPath = os.path.join(imgFullFol, imgName)
+                shutil.copy(imgInputPath, imgResPath)
+                mskResPath = os.path.join(mskFullFol, imgName)
+
                 # Temporary saving the same as EndoDepth: grayscale with 16 bit
-                self.predict_and_save(image, imageOutPath)
+                self.predict_and_save(image, mskResPath)
 
 
-    def predict_and_save(self, img, imgSavePath):
+    def predict_and_save(self, img, dphSavePath):
         result = prediction(device=self.device, model=self.midas, image=img,
                             inputSize=(self.netW, self.netH), targetSize=img[1::-1], optimize=self.optimize, useData=False)
         depthImg = get_depth_img(result)
-        depthImg.save(imgSavePath)
+        depthImg.save(dphSavePath)
 
 
     def predict_video(self, inputPath, outputPath, nFrames=3000):
@@ -117,12 +127,8 @@ class MidasDepth:
         vWidth = int(video.stream.get(cv2.CAP_PROP_FRAME_WIDTH))
         vHeight = int(video.stream.get(cv2.CAP_PROP_FRAME_HEIGHT))
         vFrame = int(video.stream.get(cv2.CAP_PROP_FRAME_COUNT))
-        imgFullFolder = os.path.join(outputPath, 'images')
-        mskFullFolder = os.path.join(outputPath, 'masks')
-        if not os.path.isdir(outputPath):
-            os.makedirs(imgFullFolder)
-            os.makedirs(mskFullFolder)
-        # depthVideoCapture = cv2.VideoWriter(depthVideoPath, cv2.VideoWriter_fourcc(*'mp4v'), fps, (vWidth, vHeight), True)
+        
+               # depthVideoCapture = cv2.VideoWriter(depthVideoPath, cv2.VideoWriter_fourcc(*'mp4v'), fps, (vWidth, vHeight), True)
         if vFrame<=nFrames:
             nFrames = vFrame
         with torch.no_grad():
@@ -131,11 +137,13 @@ class MidasDepth:
                 frame = video.read()
                 if frame is not None:
                     name = f'{baseName}_{frame_index}.jpg'
-                    imgFullPath = os.path.join(imgFullFolder, name)
-                    mskFullPath = os.path.join(mskFullFolder, name)
+                    
                     original_image_rgb = np.flip(frame, 2)  # in [0, 255] (flip required to get RGB)
                     image = self.transform({"image": original_image_rgb/255})["image"]
-                    cv2.imwrite(original_image_rgb, imgFullPath)
+                    imgFolder, mskFolder = self.make_output_folder(outputPath)
+                    imgFullPath = os.path.join(imgFolder, name)
+                    mskFullPath = os.path.join(mskFolder, name)
+                    cv2.imwrite(frame, imgFullPath)
                     self.predict_and_save(image, mskFullPath)
 
                     # original_image_bgr = np.flip(original_image_rgb, 2) if side else None
@@ -172,6 +180,16 @@ class MidasDepth:
             suffix = inputPath[-4:]
             if suffix in ['.mp4', '.avi']:
                 self.predict_video(inputPath, outputPath)
+            else:
+                raise RuntimeError('Must be a folder of images or a video file')
+            
+def disp_to_depth(disp, minDepth, maxDepth):
+    minDisp = 1/maxDepth
+    maxDisp = 1/minDepth
+    scaledDisp = minDisp+(maxDisp-minDisp)*disp
+    depth=1/scaledDisp    
+    return scaledDisp, depth
+
 
 def get_parser():
     parser = argparse.ArgumentParser()
