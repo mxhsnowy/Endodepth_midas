@@ -1,0 +1,1 @@
+python run_midas_depth.py --input_path '/home/vuhai/datasets/hvai_test_videos/Da_day_211122_3.mp4' --output_path '/home/vuhai/datasets/hvai_test_videos/midas/Da_day_test' --model_weight '/home/vuhai/libs/Endodepth_midas/MiDaS/weights/dpt_swin2_large_384.pt'

@@ -177,10 +177,12 @@ class MidasDepth:
 
     def __call__(self, inputPath, outputPath):
         if os.path.isdir(inputPath):
+            print('Running on folder')
             self.predict_folder(inputPath, outputPath)
         else:
             suffix = inputPath[-4:]
             if suffix in ['.mp4', '.avi']:
+                print('Running on video')
                 self.predict_video(inputPath, outputPath)
             else:
                 raise RuntimeError('Must be a folder of images or a video file')
@@ -211,6 +213,8 @@ def get_parser():
                         default=None,
                         help='Path to the trained weights of model'
                         )
+    parser.add_argument('-n', '--num_images', default=1000, help='Number of images that is extracted by midas')
+    
     parser.add_argument(
         '--scale',
         type=int,
@@ -218,6 +222,7 @@ def get_parser():
         help='image depth scaling. For Hamlyn dataset the weighted average baseline is 5.2864. It is multiplied by 10 '
              'because the imposed baseline during training is 0.1',
     )
+
     parser.add_argument(
         '--saturation_depth',
         type=int,
