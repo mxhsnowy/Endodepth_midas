@@ -4,7 +4,7 @@ import os
 import argparse
 from depth_net import load_main_dpt_model
 import cv2
-from imutils import FileVideoStream
+from imutils.video import FileVideoStream
 import numpy as np
 import time
 import PIL.Image as pil
