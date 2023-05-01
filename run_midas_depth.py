@@ -4,7 +4,7 @@ import os
 import argparse
 from depth_net import load_main_dpt_model
 import cv2
-from imutils import VideoStream, FileVideoStream
+from imutils import FileVideoStream
 import numpy as np
 import time
 import PIL.Image as pil
@@ -165,7 +165,7 @@ class MidasDepth:
                         fps = (1 - alpha) * fps + alpha * 1 / (time.time()-time_start)  # exponential moving average
                         time_start = time.time()
                     print(f"\rFPS: {round(fps,2)}", end="")
-                    print(f'Processed frame:{frame_index}/{vFrame}')
+                    print(f'Processed frame:{frame_index}/{nFrames}')
 
                     if cv2.waitKey(1) == 27:  # Escape key
                         break
