@@ -2,7 +2,7 @@ import torch
 import glob
 import os
 import argparse
-from depth_net import load_main_dpt_model
+from depth_net import load_main_dpt_model, load_model
 import cv2
 from imutils.video import FileVideoStream
 import numpy as np
@@ -73,13 +73,13 @@ def disp_to_depth(disp, min_depth, max_depth):
 class MidasDepth:
     # Predict one->many and many->many
     # NOTE: the depth output, for this application scale it from 0->1 rather than 0->255 for visualization
-    def __init__(self, modelPath, scale, saturationDepth) -> None:
-        self.midas, self.transform, self.netH, self.netW = load_main_dpt_model(modelPath)
+    def __init__(self, modelType, modelPath, scale, saturationDepth) -> None:
+        # self.midas, self.transform, self.netH, self.netW = load_main_dpt_model(modelPath)
         self.device = torch.device('cuda')
         self.optimize = False
         self.saturationDepth = saturationDepth
         self.scale=scale
-
+        self.midas, self.transform, self.netH, self.netW = load_model(self.device, modelPath, modelType)
     @staticmethod
     def make_output_folder(outputPath):
         imgFullFolder = os.path.join(outputPath, 'color')
@@ -208,8 +208,9 @@ def get_parser():
                         default=None,
                         help='Folder for output images'
                         )
+    parser.add_argument('--model_type', default='dpt_swin2_large_384')
 
-    parser.add_argument('-m', '--model_weights',
+    parser.add_argument('--model_weights',
                         default=None,
                         help='Path to the trained weights of model'
                         )
@@ -275,7 +276,7 @@ def get_parser():
 if __name__=='__main__':
     args = get_parser()
     
-    depthPred = MidasDepth(args.model_weights, args.scale, args.saturation_depth)
+    depthPred = MidasDepth(args.model_type, args.model_weights, args.scale, args.saturation_depth)
     inputPath = args.input_path
     outputPath = args.output_path
     depthPred(inputPath, outputPath)
