@@ -145,7 +145,7 @@ class MidasDepth:
                     imgFolder, mskFolder = self.make_output_folder(outputPath)
                     imgFullPath = os.path.join(imgFolder, name)
                     mskFullPath = os.path.join(mskFolder, name)
-                    cv2.imwrite(frame, imgFullPath)
+                    cv2.imwrite(imgFullPath, frame)
                     self.predict_and_save(image, mskFullPath)
 
                     # original_image_bgr = np.flip(original_image_rgb, 2) if side else None
